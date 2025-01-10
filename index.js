@@ -4,6 +4,7 @@ const { httpRequest } = require("./http-request");
 const { WebVTTParser } = require("webvtt-parser");
 const fs = require("fs");
 const { isChinese } = require("mandarino");
+const { removeNull } = require("mandarino/src/utils/remove-null");
 
 const parser = new WebVTTParser();
 
@@ -105,7 +106,7 @@ const listSubtitles = async ({ id, lang }) => {
           lang: "zh",
           start: cue?.startTime,
           end: cue?.endTime,
-          isChinese: isChinese(hanziProps.input),
+          isChinese: hanziProps.input.split("").some((item) => isChinese(item)),
           ...hanziProps,
         };
       })
@@ -115,14 +116,17 @@ const listSubtitles = async ({ id, lang }) => {
         const en = items?.find((item) => !item.isChinese);
 
         // hanzi ? delete hanzi.isChinese : null;
-        return acc.concat({
-          lang: "zh",
-          input: hanzi?.input,
-          start: hanzi?.start,
-          end: hanzi?.end,
-          en: en?.input,
-        });
-      }, []);
+        return acc.concat(
+          removeNull({
+            lang: "zh",
+            input: hanzi?.input,
+            start: hanzi?.start,
+            end: hanzi?.end,
+            en: en?.input,
+          })
+        );
+      }, [])
+      .filter((item) => item.end);
 
     return {
       title,
@@ -202,7 +206,8 @@ const listSubtitles = async ({ id, lang }) => {
   });
 };
 
-const id = "https://www.youtube.com/watch?v=kaAK9mKO8cs";
+// const id = "https://www.youtube.com/watch?v=kaAK9mKO8cs";
+const id = "https://www.youtube.com/watch?v=jei7cFg9IN8";
 const lang = "zh-CN";
 
 listSubtitles({ id, lang }).then((transcriptions) => {
