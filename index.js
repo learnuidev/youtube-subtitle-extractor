@@ -2,12 +2,8 @@ const ytdl = require("@distube/ytdl-core");
 
 const { httpRequest } = require("./http-request");
 const { WebVTTParser } = require("webvtt-parser");
-
-const secondsInHour = 3600;
-const secondsInMinute = 60;
-const hourIndex = 0;
-const minuteIndex = 1;
-const secondIndex = 2;
+const fs = require("fs");
+const { isChinese } = require("mandarino");
 
 const parser = new WebVTTParser();
 
@@ -93,24 +89,40 @@ const listSubtitles = async ({ id, lang }) => {
 
     const tree = parser.parse(subtitles, "metadata");
 
-    const newSubtitles = tree?.cues?.map((cue) => {
-      const hanziProps =
-        resolvedLang === "zh-CN"
-          ? {
-              input: cue?.text?.split("\n").join(" "),
-              pinyin: "",
-            }
-          : {
-              input: cue?.text?.split("\n").join(" "),
-            };
+    const newSubtitles = tree?.cues
+      ?.map((cue) => {
+        const hanziProps =
+          resolvedLang === "zh-CN"
+            ? {
+                input: cue?.text?.split("\n").join(" "),
+                pinyin: "",
+              }
+            : {
+                input: cue?.text?.split("\n").join(" "),
+              };
 
-      return {
-        lang: "zh",
-        start: cue?.startTime,
-        end: cue?.endTime,
-        ...hanziProps,
-      };
-    });
+        return {
+          lang: "zh",
+          start: cue?.startTime,
+          end: cue?.endTime,
+          isChinese: isChinese(hanziProps.input),
+          ...hanziProps,
+        };
+      })
+      .reduce((acc, curr, idx, ctx) => {
+        const items = ctx.filter((item) => item?.start === curr?.start);
+        const hanzi = items?.find((item) => item.isChinese);
+        const en = items?.find((item) => !item.isChinese);
+
+        // hanzi ? delete hanzi.isChinese : null;
+        return acc.concat({
+          lang: "zh",
+          input: hanzi?.input,
+          start: hanzi?.start,
+          end: hanzi?.end,
+          en: en?.input,
+        });
+      }, []);
 
     return {
       title,
@@ -190,17 +202,10 @@ const listSubtitles = async ({ id, lang }) => {
   });
 };
 
-const getTotalSeconds = (times) => {
-  return (
-    parseFloat(times[hourIndex]) * secondsInHour +
-    parseFloat(times[minuteIndex]) * secondsInMinute +
-    parseFloat(times[secondIndex])
-  );
-};
-
 const id = "https://www.youtube.com/watch?v=kaAK9mKO8cs";
 const lang = "zh-CN";
 
 listSubtitles({ id, lang }).then((transcriptions) => {
+  fs.writeFileSync(`./${Date.now()}.json`, JSON.stringify(transcriptions));
   console.log(transcriptions);
 });
