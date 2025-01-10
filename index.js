@@ -6,6 +6,8 @@ const fs = require("fs");
 const { isChinese } = require("mandarino");
 const { removeNull } = require("mandarino/src/utils/remove-null");
 
+const crypto = require("crypto");
+
 const parser = new WebVTTParser();
 
 const getTrack = ({ tracks, lang }) => {
@@ -90,43 +92,50 @@ const listSubtitles = async ({ id, lang }) => {
 
     const tree = parser.parse(subtitles, "metadata");
 
-    const newSubtitles = tree?.cues
-      ?.map((cue) => {
-        const hanziProps =
-          resolvedLang === "zh-CN"
-            ? {
-                input: cue?.text?.split("\n").join(" "),
-                pinyin: "",
-              }
-            : {
-                input: cue?.text?.split("\n").join(" "),
-              };
+    const newSubtitles = [
+      ...new Set(
+        tree?.cues
+          ?.map((cue) => {
+            const hanziProps =
+              resolvedLang === "zh-CN"
+                ? {
+                    input: cue?.text?.split("\n").join(" "),
+                    pinyin: "",
+                  }
+                : {
+                    input: cue?.text?.split("\n").join(" "),
+                  };
 
-        return {
-          lang: "zh",
-          start: cue?.startTime,
-          end: cue?.endTime,
-          isChinese: hanziProps.input.split("").some((item) => isChinese(item)),
-          ...hanziProps,
-        };
-      })
-      .reduce((acc, curr, idx, ctx) => {
-        const items = ctx.filter((item) => item?.start === curr?.start);
-        const hanzi = items?.find((item) => item.isChinese);
-        const en = items?.find((item) => !item.isChinese);
-
-        // hanzi ? delete hanzi.isChinese : null;
-        return acc.concat(
-          removeNull({
-            lang: "zh",
-            input: hanzi?.input,
-            start: hanzi?.start,
-            end: hanzi?.end,
-            en: en?.input,
+            return {
+              lang: "zh",
+              start: cue?.startTime,
+              end: cue?.endTime,
+              isChinese: hanziProps.input
+                .split("")
+                .some((item) => isChinese(item)),
+              ...hanziProps,
+            };
           })
-        );
-      }, [])
-      .filter((item) => item.end);
+          .reduce((acc, curr, idx, ctx) => {
+            const items = ctx.filter((item) => item?.start === curr?.start);
+            const hanzi = items?.find((item) => item.isChinese);
+            const en = items?.find((item) => !item.isChinese);
+
+            // hanzi ? delete hanzi.isChinese : null;
+            return acc.concat(
+              removeNull({
+                lang: "zh",
+                input: hanzi?.input,
+                start: hanzi?.start,
+                end: hanzi?.end,
+                en: en?.input,
+              })
+            );
+          }, [])
+          // .filter((item) => item.end)
+          .map((item) => JSON.stringify(item))
+      ),
+    ].map((item) => ({ ...JSON.parse(item), id: crypto.randomUUID() }));
 
     return {
       title,
@@ -206,8 +215,8 @@ const listSubtitles = async ({ id, lang }) => {
   });
 };
 
-// const id = "https://www.youtube.com/watch?v=kaAK9mKO8cs";
-const id = "https://www.youtube.com/watch?v=jei7cFg9IN8";
+const id = "https://www.youtube.com/watch?v=kaAK9mKO8cs";
+// const id = "https://www.youtube.com/watch?v=jei7cFg9IN8";
 const lang = "zh-CN";
 
 listSubtitles({ id, lang }).then((transcriptions) => {
